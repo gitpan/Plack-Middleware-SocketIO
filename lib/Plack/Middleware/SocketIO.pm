@@ -5,11 +5,20 @@ use warnings;
 
 use base 'Plack::Middleware';
 
-our $VERSION = '0.00902';
+our $VERSION = '0.00903';
 
-use Plack::Util::Accessor qw(resource handler);
+use Plack::Util ();
+use Plack::Util::Accessor qw(resource handler class instance method);
 
 use Plack::Middleware::SocketIO::Resource;
+
+sub new {
+    my $self = shift->SUPER::new(@_);
+
+    $self->handler($self->_get_handler);
+
+    return $self;
+}
 
 sub call {
     my $self = shift;
@@ -18,7 +27,7 @@ sub call {
     my $resource = $self->resource || 'socket.io';
     $resource = quotemeta $resource;
 
-    if ($env->{PATH_INFO} =~ m{^/$resource/}) {
+    if (defined $env->{PATH_INFO} && $env->{PATH_INFO} =~ m{^/$resource/}) {
         my $instance = Plack::Middleware::SocketIO::Resource->instance;
 
         return $instance->finalize($env, $self->handler)
@@ -26,6 +35,22 @@ sub call {
     }
 
     return $self->app->($env);
+}
+
+sub _get_handler {
+    my $self = shift;
+
+    return $self->handler if $self->handler;
+
+    die q{Either 'handler', 'class' or 'instance' must be specified}
+      unless $self->instance || $self->class;
+
+    my $method = $self->method || 'run';
+
+    my $instance = $self->instance
+      || do { Plack::Util::load_class($self->class); $self->class->new; };
+
+    return $instance->run;
 }
 
 1;
@@ -58,6 +83,14 @@ Plack::Middleware::SocketIO - Socket.IO middleware
         $app;
     };
 
+    # or
+
+    builder {
+        enable "SocketIO", class => 'MyApp::Handler', method => 'run';
+
+        $app;
+    };
+
 =head1 DESCRIPTION
 
 L<Plack::Middleware::SocketIO> is a server implmentation of SocketIO in Perl.
@@ -82,6 +115,60 @@ All the transports are supported.
 
 For TLS/SSL a secure proxy is needed. C<stunnel> or L<App::TLSMe> is
 recommended.
+
+=head1 CONFIGURATIONS
+
+=over 4
+
+=item resource
+
+    enable "SocketIO",
+        resource => 'socket.io', ...;
+
+Specifies the path prefix under which all the requests are handled. This is done
+so the rest of your application won't interfere with Socket.IO specific calls.
+
+=item handler
+
+    enable "SocketIO",
+        handler => sub {
+            my $socket = shift;
+
+            $socket->on_message(sub {
+                my $socket = shift;
+            });
+
+            $socket->send_message('hello');
+        };
+
+=item class or instance, method
+
+    enable "SocketIO",
+        class => 'MyHandler', method => 'run';
+
+    # or
+
+    enable "SocketIO",
+        instance => MyHandler->new(foo => 'bar'), method => 'run';
+
+    package MyHandler;
+
+    sub new { ...  } # or use Moose, Boose, Goose, Doose
+
+    sub run {
+        my $self = shift;
+
+        return sub {
+
+            # same code as above
+        }
+    }
+
+Loads C<class> using L<Plack::Util::load_class>, creates a new object or uses
+a passed C<instance> and runs C<run> method expecting it to return an anonymous
+subroutine.
+
+=back
 
 =head1 DEVELOPMENT
 

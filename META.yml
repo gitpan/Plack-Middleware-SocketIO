@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Plack-Middleware-SocketIO
-version:            0.00902
+version:            0.00903
 abstract:           Socket.IO Plack middleware
 author:
     - Viacheslav Tykhanovskyi <vti@cpan.org>
