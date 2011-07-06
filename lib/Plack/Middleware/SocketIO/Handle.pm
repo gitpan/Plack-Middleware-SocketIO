@@ -75,6 +75,19 @@ sub on_eof {
     return $self;
 }
 
+sub on_error {
+    my $self = shift;
+    my ($cb) = @_;
+
+    $self->{handle}->on_error(
+        sub {
+            $cb->($self);
+        }
+    );
+
+    return $self;
+}
+
 sub write {
     my $self = shift;
     my ($chunk, $cb) = @_;
@@ -105,7 +118,8 @@ sub close {
 
     $handle->timeout_reset;
 
-    shutdown $handle->fh, 1;
+    shutdown $handle->fh, 2;
+    close $handle->fh;
 
     $handle->destroy;
     undef $handle;
